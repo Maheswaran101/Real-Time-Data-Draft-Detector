@@ -11,7 +11,10 @@ app = Flask(__name__)
 TRAIN_PATH = "artifacts/train.csv"
 
 if not os.path.exists(TRAIN_PATH):
-    raise FileNotFoundError("artifacts/train.csv not found")
+    print("WARNING: train.csv not found. App will not work properly.")
+    train_df = pd.DataFrame()
+else:
+    train_df = pd.read_csv(TRAIN_PATH)
 
 train_df = pd.read_csv(TRAIN_PATH)
 
