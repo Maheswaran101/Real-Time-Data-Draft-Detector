@@ -72,4 +72,21 @@ This project solves that by:
 
 ---
 
-## 📁 Project Structure
+## 📁 Project Structuredata-drift-detector/
+│
+├── app.py
+├── requirements.txt
+├── artifacts/
+│ └── train.csv
+└── templates/
+└── index.html
+
+
+---
+
+## 🚀 Run Locally
+
+### 1. Clone Repo
+```bash
+git clone https://github.com/your-username/data-drift-detector.git
+cd data-drift-detector
