@@ -10,22 +10,23 @@ app = Flask(__name__)
 # -------------------------------
 TRAIN_PATH = "artifacts/train.csv"
 
-if not os.path.exists(TRAIN_PATH):
-    print("WARNING: train.csv not found. App will not work properly.")
-    train_df = pd.DataFrame()
-else:
+if os.path.exists(TRAIN_PATH):
     train_df = pd.read_csv(TRAIN_PATH)
-
-train_df = pd.read_csv(TRAIN_PATH)
+else:
+    print("WARNING: train.csv not found. Using empty DataFrame.")
+    train_df = pd.DataFrame()
 
 # Select only numeric columns and remove target
-numerical_cols = train_df.select_dtypes(include=np.number).columns.tolist()
-if "target" in numerical_cols:
-    numerical_cols.remove("target")
+if not train_df.empty:
+    numerical_cols = train_df.select_dtypes(include=np.number).columns.tolist()
+    if "target" in numerical_cols:
+        numerical_cols.remove("target")
+else:
+    numerical_cols = []
 
 
 # -------------------------------
-# PSI Function (YOUR LOGIC)
+# PSI Function
 # -------------------------------
 def calculate_psi(baseline_series, new_series, num_bins=10):
     all_data = pd.concat([baseline_series, new_series])
@@ -65,6 +66,9 @@ def get_drift_status(psi_value):
 def detect_drift(new_df):
     results = []
 
+    if train_df.empty:
+        return [{"error": "Training data not available"}]
+
     for col in numerical_cols:
         if col not in new_df.columns:
             continue
@@ -95,7 +99,6 @@ def detect_drift(new_df):
 # -------------------------------
 # Routes
 # -------------------------------
-
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -132,5 +135,4 @@ def predict():
 # Run (Render Compatible)
 # -------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
