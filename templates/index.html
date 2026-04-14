@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Data Drift Detection Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-void: #050810;
+    --bg-deep: #090d1a;
+    --bg-card: rgba(12, 18, 35, 0.85);
+    --bg-card-hover: rgba(16, 24, 48, 0.92);
+    --border-subtle: rgba(99, 179, 237, 0.08);
+    --border-glow: rgba(99, 179, 237, 0.22);
+    --accent-cyan: #38bdf8;
+    --accent-cyan-dim: rgba(56, 189, 248, 0.15);
+    --accent-violet: #818cf8;
+    --accent-violet-dim: rgba(129, 140, 248, 0.12);
+    --green: #34d399;
+    --green-dim: rgba(52, 211, 153, 0.12);
+    --yellow: #fbbf24;
+    --yellow-dim: rgba(251, 191, 36, 0.12);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.12);
+    --text-primary: #e2e8f0;
+    --text-secondary: #64748b;
+    --text-muted: #334155;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --glass-blur: blur(20px);
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 6px;
+    --shadow-card: 0 4px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,179,237,0.06);
+    --shadow-glow: 0 0 40px rgba(56, 189, 248, 0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg-void);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid noise background ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(56, 189, 248, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56, 189, 248, 0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -30vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 70vw;
+    height: 60vh;
+    background: radial-gradient(ellipse at center, rgba(56,189,248,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 52px 0 36px;
+    border-bottom: 1px solid var(--border-subtle);
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .header-left {}
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    background: var(--accent-cyan-dim);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    padding: 5px 12px;
+    border-radius: 100px;
+    margin-bottom: 18px;
+    animation: fadeSlideDown 0.5s ease both;
+  }
+
+  .badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(26px, 4vw, 42px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #e2e8f0 0%, var(--accent-cyan) 60%, var(--accent-violet) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: fadeSlideDown 0.55s 0.05s ease both;
+  }
+
+  .subtitle {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    max-width: 520px;
+    animation: fadeSlideDown 0.55s 0.1s ease both;
+  }
+
+  .header-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    animation: fadeSlideDown 0.55s 0.15s ease both;
+  }
+
+  .live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  .timestamp {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── GLASS CARD ── */
+  .card {
+    background: var(--bg-card);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .card:hover {
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-card), var(--shadow-glow);
+  }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  /* ── UPLOAD SECTION ── */
+  .upload-section {
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  #upload-form {
+    padding: 32px;
+  }
+
+  .drop-zone {
+    border: 2px dashed rgba(56, 189, 248, 0.2);
+    border-radius: var(--radius-md);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    background: rgba(56, 189, 248, 0.02);
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(56, 189, 248, 0.05);
+    transform: scale(1.005);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .upload-icon {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 16px;
+    color: var(--accent-cyan);
+    opacity: 0.7;
+  }
+
+  .drop-title {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  .drop-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .drop-sub span {
+    color: var(--accent-cyan);
+    font-weight: 500;
+  }
+
+  .file-selected {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--accent-cyan-dim);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--accent-cyan);
+  }
+
+  .file-selected.visible { display: flex; }
+
+  .file-icon-sm {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .file-name-text { flex: 1; }
+  .file-size { color: var(--text-secondary); font-size: 11px; }
+
+  .upload-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .btn-primary {
+    flex: 1;
+    min-width: 160px;
+    padding: 13px 24px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    color: var(--bg-void);
+    background: var(--accent-cyan);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-primary:hover {
+    background: #7dd3fc;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(56, 189, 248, 0.3);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+
+  .btn-secondary {
+    padding: 13px 20px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--border-glow);
+    color: var(--text-primary);
+  }
+
+  /* PSI Info */
+  .psi-info {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--accent-violet-dim);
+    border: 1px solid rgba(129, 140, 248, 0.12);
+    border-radius: var(--radius-sm);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .psi-threshold {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .psi-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .psi-threshold strong {
+    color: var(--text-primary);
+    font-weight: 500;
+    display: block;
+    font-size: 11px;
+    margin-bottom: 1px;
+  }
+
+  /* ── LOADING ── */
+  .loading-section {
+    display: none;
+    padding: 52px 32px;
+    text-align: center;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .loading-section.visible { display: block; }
+
+  .spinner-ring {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--border-subtle);
+    border-top-color: var(--accent-cyan);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    margin: 0 auto 24px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-title {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .loading-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+  }
+
+  .progress-track {
+    height: 2px;
+    background: var(--border-subtle);
+    border-radius: 100px;
+    overflow: hidden;
+    max-width: 300px;
+    margin: 0 auto;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-violet), var(--accent-cyan));
+    border-radius: 100px;
+    animation: progressAnim 2s ease infinite;
+  }
+
+  @keyframes progressAnim {
+    0%   { width: 0%; margin-left: 0; }
+    50%  { width: 70%; margin-left: 0; }
+    100% { width: 0%; margin-left: 100%; }
+  }
+
+  /* ── SUMMARY CARDS ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .summary-card {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .summary-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .summary-card.total::after { background: var(--accent-cyan); }
+  .summary-card.drifted::after { background: var(--red); }
+  .summary-card.status::after { background: var(--green); }
+
+  .summary-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+
+  .summary-value {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .summary-card.total .summary-value { color: var(--accent-cyan); }
+  .summary-card.drifted .summary-value { color: var(--red); }
+  .summary-card.status .summary-value {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .summary-card.status .summary-value.ok { color: var(--green); }
+  .summary-card.status .summary-value.warn { color: var(--yellow); }
+  .summary-card.status .summary-value.crit { color: var(--red); }
+
+  .summary-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+  }
+
+  /* ── RESULTS GRID ── */
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+    animation: fadeUp 0.6s 0.35s ease both;
+  }
+
+  /* Table */
+  .table-card { padding: 0; overflow: hidden; }
+
+  .table-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .table-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--border-subtle);
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+
+  .drift-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .drift-table thead tr {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .drift-table th {
+    padding: 10px 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-align: left;
+    font-weight: 400;
+  }
+
+  .drift-table tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.2s;
+  }
+
+  .drift-table tbody tr:hover {
+    background: rgba(56, 189, 248, 0.03);
+  }
+
+  .drift-table tbody tr:last-child { border-bottom: none; }
+
+  .drift-table td {
+    padding: 11px 16px;
+    font-size: 12.5px;
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+
+  .feature-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent-cyan);
+  }
+
+  .psi-score {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .drift-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+
+  .drift-badge.none {
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(52, 211, 153, 0.18);
+  }
+
+  .drift-badge.moderate {
+    color: var(--yellow);
+    background: var(--yellow-dim);
+    border: 1px solid rgba(251, 191, 36, 0.18);
+  }
+
+  .drift-badge.high {
+    color: var(--red);
+    background: var(--red-dim);
+    border: 1px solid rgba(248, 113, 113, 0.18);
+  }
+
+  .drift-badge::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Chart */
+  .chart-card { padding: 24px; }
+
+  .chart-title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .chart-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+  }
+
+  .chart-wrapper {
+    position: relative;
+    height: 260px;
+  }
+
+  /* ── ERROR ── */
+  .error-box {
+    display: none;
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    background: rgba(248, 113, 113, 0.07);
+    border: 1px solid rgba(248, 113, 113, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--red);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .error-box.visible { display: flex; }
+  .error-box-text { flex: 1; }
+
+  /* ── FOOTER ── */
+  footer {
+    margin-top: 64px;
+    padding: 28px 0;
+    border-top: 1px solid var(--border-subtle);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  footer span { color: var(--accent-cyan); }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── TOOLTIP ── */
+  [data-tooltip] { position: relative; cursor: help; }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: #1e293b;
+    border: 1px solid var(--border-glow);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 100;
+  }
+
+  [data-tooltip]:hover::after { opacity: 1; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+    .summary-grid .status { grid-column: 1 / -1; }
+    .results-grid { grid-template-columns: 1fr; }
+    .header-status { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    .summary-grid { grid-template-columns: 1fr; }
+    #upload-form { padding: 20px; }
+    .drop-zone { padding: 32px 16px; }
+  }
+
+  /* hidden helper */
+  .results-area { display: none; }
+  .results-area.visible { display: block; }
+
+  /* psi bar inside table */
+  .psi-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .psi-bar-track {
+    flex: 1;
+    height: 3px;
+    background: var(--border-subtle);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .psi-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.6s ease;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <div class="badge">ML Monitoring Tool</div>
+        <h1>Data Drift Detection Dashboard</h1>
+        <p class="subtitle">Monitor feature distribution changes using PSI — Population Stability Index</p>
+      </div>
+      <div class="header-status">
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          System Active
+        </div>
+        <div class="timestamp" id="clock">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── UPLOAD ── -->
+  <section class="upload-section">
+    <div class="section-label">Input Configuration</div>
+    <div class="card">
+      <form id="upload-form" action="/predict" method="POST" enctype="multipart/form-data">
+
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="csvFile" name="file" accept=".csv" />
+          <svg class="upload-icon" viewBox="0 0 52 52" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="6" y="14" width="40" height="30" rx="4" stroke-opacity="0.4"/>
+            <path d="M18 14V10a4 4 0 014-4h8a4 4 0 014 4v4" stroke-opacity="0.4"/>
+            <path d="M26 22v14M20 28l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="drop-title">Drop your CSV file here</div>
+          <div class="drop-sub">or <span>browse to upload</span> — only .csv accepted</div>
+        </div>
+
+        <div class="file-selected" id="fileSelected">
+          <svg class="file-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <div>
+            <div class="file-name-text" id="fileName">—</div>
+            <div class="file-size" id="fileSize">—</div>
+          </div>
+        </div>
+
+        <div class="upload-actions">
+          <button type="button" class="btn-primary" id="analyzeBtn" onclick="runDemo()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Analyze Drift
+          </button>
+          <button type="reset" class="btn-secondary" id="clearBtn" onclick="resetUI()">Clear</button>
+        </div>
+
+        <!-- PSI legend -->
+        <div class="psi-info">
+          <div class="psi-threshold" data-tooltip="PSI < 0.1 — distribution is stable">
+            <div class="psi-dot" style="background:var(--green);"></div>
+            <div>
+              <strong>No Drift</strong>
+              PSI &lt; 0.10
+            </div>
+          </div>
+          <div class="psi-threshold" data-tooltip="PSI 0.1–0.2 — minor distribution shift, monitor">
+            <div class="psi-dot" style="background:var(--yellow);"></div>
+            <div>
+              <strong>Moderate Drift</strong>
+              PSI 0.10 – 0.20
+            </div>
+          </div>
+          <div class="psi-threshold" data-tooltip="PSI > 0.2 — significant shift, retrain model">
+            <div class="psi-dot" style="background:var(--red);"></div>
+            <div>
+              <strong>High Drift</strong>
+              PSI &gt; 0.20
+            </div>
+          </div>
+        </div>
+
+      </form>
+    </div>
+  </section>
+
+  <!-- ── ERROR ── -->
+  <div class="error-box" id="errorBox">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <span class="error-box-text" id="errorMsg">Something went wrong.</span>
+  </div>
+
+  <!-- ── LOADING ── -->
+  <div class="card loading-section" id="loadingSection">
+    <div class="spinner-ring"></div>
+    <div class="loading-title">Analyzing feature drift…</div>
+    <div class="loading-sub">Computing PSI scores across all feature columns</div>
+    <div class="progress-track">
+      <div class="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div class="results-area" id="resultsArea">
+
+    <!-- Summary cards -->
+    <div class="section-label">Analysis Summary</div>
+    <div class="summary-grid">
+      <div class="card summary-card total">
+        <div class="summary-icon">⊞</div>
+        <div class="summary-value" id="totalFeatures">0</div>
+        <div class="summary-label">Total Features</div>
+      </div>
+      <div class="card summary-card drifted">
+        <div class="summary-icon">⚡</div>
+        <div class="summary-value" id="driftedFeatures">0</div>
+        <div class="summary-label">Drifted Features</div>
+      </div>
+      <div class="card summary-card status">
+        <div class="summary-icon">◈</div>
+        <div class="summary-value ok" id="systemStatus">—</div>
+        <div class="summary-label">Overall Status</div>
+      </div>
+    </div>
+
+    <!-- Table + Chart -->
+    <div class="section-label">Feature Analysis</div>
+    <div class="results-grid">
+
+      <div class="card table-card">
+        <div class="table-header">
+          PSI Results
+          <span class="table-count" id="tableCount">0 features</span>
+        </div>
+        <table class="drift-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th data-tooltip="Population Stability Index">PSI Score</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody">
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card chart-card">
+        <div class="chart-title">PSI Score Distribution</div>
+        <div class="chart-sub">Threshold lines: moderate (0.10) · high (0.20)</div>
+        <div class="chart-wrapper">
+          <canvas id="psiChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <footer>
+    Built by <span>Mahes</span> &nbsp;·&nbsp; Data Analyst Portfolio Project &nbsp;·&nbsp; PSI-based ML Monitoring
+  </footer>
+
+</div>
+
+<script>
+// ── Clock ──
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    day: '2-digit', month: 'short', year: 'numeric'
+  }) + ' IST';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── File input ──
+const fileInput = document.getElementById('csvFile');
+const fileSelected = document.getElementById('fileSelected');
+const fileNameEl = document.getElementById('fileName');
+const fileSizeEl = document.getElementById('fileSize');
+const dropZone = document.getElementById('dropZone');
+
+fileInput.addEventListener('change', () => {
+  const f = fileInput.files[0];
+  if (f) showFile(f);
+});
+
+function showFile(f) {
+  fileNameEl.textContent = f.name;
+  fileSizeEl.textContent = (f.size / 1024).toFixed(1) + ' KB';
+  fileSelected.classList.add('visible');
+}
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.csv')) {
+    fileInput.files = e.dataTransfer.files;
+    showFile(f);
+  } else {
+    showError('Only .csv files are accepted.');
+  }
+});
+
+// ── Mock data ──
+const MOCK_DATA = [
+  { feature: 'age',             psi: 0.034 },
+  { feature: 'income',          psi: 0.187 },
+  { feature: 'credit_score',    psi: 0.312 },
+  { feature: 'loan_amount',     psi: 0.072 },
+  { feature: 'employment_yrs',  psi: 0.009 },
+  { feature: 'debt_ratio',      psi: 0.251 },
+  { feature: 'num_accounts',    psi: 0.143 },
+  { feature: 'missed_payments', psi: 0.058 },
+  { feature: 'balance',         psi: 0.195 },
+  { feature: 'tenure_months',   psi: 0.021 },
+];
+
+function classify(psi) {
+  if (psi < 0.1)  return { label: 'No Drift',       cls: 'none',     color: '#34d399' };
+  if (psi < 0.2)  return { label: 'Moderate Drift', cls: 'moderate', color: '#fbbf24' };
+  return             { label: 'High Drift',       cls: 'high',     color: '#f87171' };
+}
+
+let chartInstance = null;
+
+function runDemo() {
+  hideError();
+  document.getElementById('loadingSection').classList.add('visible');
+  document.getElementById('resultsArea').classList.remove('visible');
+
+  setTimeout(() => {
+    document.getElementById('loadingSection').classList.remove('visible');
+    renderResults(MOCK_DATA);
+  }, 2200);
+}
+
+function renderResults(data) {
+  const totalEl   = document.getElementById('totalFeatures');
+  const driftedEl = document.getElementById('driftedFeatures');
+  const statusEl  = document.getElementById('systemStatus');
+  const tbody     = document.getElementById('resultsTableBody');
+  const countEl   = document.getElementById('tableCount');
+
+  const total   = data.length;
+  const drifted = data.filter(d => d.psi >= 0.1).length;
+  const high    = data.filter(d => d.psi >= 0.2).length;
+
+  totalEl.textContent   = total;
+  driftedEl.textContent = drifted;
+  countEl.textContent   = total + ' features';
+
+  if (high > 0) {
+    statusEl.textContent = '⚠ Critical';
+    statusEl.className = 'summary-value crit';
+  } else if (drifted > 0) {
+    statusEl.textContent = '▲ Warning';
+    statusEl.className = 'summary-value warn';
+  } else {
+    statusEl.textContent = '✓ Stable';
+    statusEl.className = 'summary-value ok';
+  }
+
+  tbody.innerHTML = '';
+  data.forEach((d, i) => {
+    const { label, cls, color } = classify(d.psi);
+    const maxPsi = 0.5;
+    const barPct = Math.min(d.psi / maxPsi * 100, 100).toFixed(1);
+    const row = document.createElement('tr');
+    row.style.animationDelay = `${i * 0.04}s`;
+    row.innerHTML = `
+      <td class="feature-name">${d.feature}</td>
+      <td>
+        <div class="psi-bar-wrap">
+          <span class="psi-score" style="color:${color}">${d.psi.toFixed(3)}</span>
+          <div class="psi-bar-track">
+            <div class="psi-bar-fill" style="width:${barPct}%;background:${color}"></div>
+          </div>
+        </div>
+      </td>
+      <td><span class="drift-badge ${cls}">${label}</span></td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  // Chart
+  const labels = data.map(d => d.feature);
+  const scores = data.map(d => d.psi);
+  const colors = data.map(d => classify(d.psi).color);
+
+  if (chartInstance) { chartInstance.destroy(); }
+  const ctx = document.getElementById('psiChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'PSI Score',
+        data: scores,
+        backgroundColor: colors.map(c => c + '55'),
+        borderColor: colors,
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: 'rgba(99,179,237,0.2)',
+          borderWidth: 1,
+          titleFont: { family: "'DM Mono', monospace", size: 11 },
+          bodyFont:  { family: "'DM Mono', monospace", size: 12 },
+          callbacks: {
+            label: ctx => ` PSI: ${ctx.parsed.y.toFixed(3)}`
+          }
+        },
+        annotation: {}
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#64748b',
+            font: { family: "'DM Mono', monospace", size: 10 },
+            maxRotation: 35
+          },
+          grid: { color: 'rgba(99,179,237,0.05)' }
+        },
+        y: {
+          min: 0,
+          max: Math.max(...scores) * 1.3,
+          ticks: {
+            color: '#64748b',
+            font: { family: "'DM Mono', monospace", size: 10 }
+          },
+          grid: { color: 'rgba(99,179,237,0.05)' }
+        }
+      },
+      animation: {
+        duration: 900,
+        easing: 'easeOutQuart'
+      }
+    },
+    plugins: [{
+      id: 'thresholdLines',
+      afterDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const thresholds = [{ val: 0.10, color: '#fbbf24' }, { val: 0.20, color: '#f87171' }];
+        thresholds.forEach(t => {
+          const y = scales.y.getPixelForValue(t.val);
+          if (y < chartArea.top || y > chartArea.bottom) return;
+          ctx.save();
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = t.color + '88';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(chartArea.left, y);
+          ctx.lineTo(chartArea.right, y);
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+    }]
+  });
+
+  document.getElementById('resultsArea').classList.add('visible');
+  document.getElementById('resultsArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  document.getElementById('errorMsg').textContent = msg;
+  box.classList.add('visible');
+}
+
+function hideError() {
+  document.getElementById('errorBox').classList.remove('visible');
+}
+
+function resetUI() {
+  hideError();
+  document.getElementById('loadingSection').classList.remove('visible');
+  document.getElementById('resultsArea').classList.remove('visible');
+  document.getElementById('fileSelected').classList.remove('visible');
+  fileNameEl.textContent = '—';
+  fileSizeEl.textContent = '—';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+}
+</script>
+</body>
+</html>
